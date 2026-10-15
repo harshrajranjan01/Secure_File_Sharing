@@ -1,0 +1,45 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local uploads and generated encrypted files
+uploads/
+storage/
+*.enc
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local database and backups
+*.sqlite3
+*.db
+*.sql.gz
+
+test*
