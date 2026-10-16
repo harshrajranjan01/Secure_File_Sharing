@@ -42,4 +42,4 @@ storage/
 *.db
 *.sql.gz
 
-test*
+test.py
