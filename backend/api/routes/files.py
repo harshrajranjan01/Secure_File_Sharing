@@ -35,10 +35,10 @@ def create_file(file: FileMetadataRequest):
 
 @router.post("/files/upload", status_code=status.HTTP_200_OK)
 async def upload_file(file: UploadFile):
-    """Validate an uploaded PDF without storing it."""
+    """Validate a PDF and retain its original bytes."""
 
     try:
-        # 1. Check the filename.
+        # 1. Check that a filename was provided.
         if not file.filename or not file.filename.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -53,6 +53,7 @@ async def upload_file(file: UploadFile):
             )
 
         total_size = 0
+        chunks = []
         signature_bytes = b""
 
         # 3. Read the file in 64 KiB chunks.
@@ -64,39 +65,48 @@ async def upload_file(file: UploadFile):
 
             total_size += len(chunk)
 
-            # 4. Enforce the 10 MiB size limit.
+            # 4. Enforce the maximum file size.
             if total_size > MAX_FILE_SIZE:
                 raise HTTPException(
                     status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail="File exceeds the 10 MiB size limit."
                 )
 
-            # 5. Collect enough bytes to check the PDF signature.
+            # 5. Retain each chunk for later encryption.
+            chunks.append(chunk)
+
+            # 6. Collect the initial bytes for signature validation.
             if len(signature_bytes) < len(PDF_SIGNATURE):
                 needed = len(PDF_SIGNATURE) - len(signature_bytes)
                 signature_bytes += chunk[:needed]
 
-        # 6. Reject empty files with a clear message.
+        # 7. Reject empty files.
         if total_size == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uploaded file is empty."
             )
 
-        # 7. Validate the PDF signature.
+        # 8. Verify the PDF signature.
         if not signature_bytes.startswith(PDF_SIGNATURE):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uploaded file does not have a PDF signature."
             )
 
-        # 8. Return information; do not store the file yet.
+        # 9. Reconstruct the original file bytes.
+        file_bytes = b"".join(chunks)
+
+
+        # 10. Return safe metadata only.
         return {
             "message": "PDF validated successfully",
             "filename": file.filename,
             "content_type": file.content_type,
-            "size_bytes": total_size
+            "size_bytes": len(file_bytes),
+            "encryption_status": "not_encrypted"
         }
 
     finally:
         await file.close()
+
