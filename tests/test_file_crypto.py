@@ -5,6 +5,23 @@ from cryptography.exceptions import InvalidTag
 from backend.crypto.file_crypto import encrypt_file_data, decrypt_file_data
 
 
+def test_pdf_round_trip():
+    # Arrange: create sample pdf-like bytes.
+    original_data = (
+        b"%PDF-1.7\n"
+        b"Sample PDF content for encryption testing.\n"
+        b"%%EOF"
+    )
+
+    #Act: encrypt and decrypt the data
+    encrypted_package=encrypt_file_data(original_data)
+    decrypted_data=decrypt_file_data(encrypted_package)
+
+    assert decrypted_data==original_data
+    assert decrypted_data.startswith(b"%PDF-")
+
+
+
 def test_complete_round_trip():
     original_data = b"Hello, This is Harsh Raj Ranjan"
 
@@ -45,10 +62,11 @@ def test_tampered_package():
     with pytest.raises(InvalidTag):
         decrypt_file_data(encrypted_package)
 
+
 def test_wrong_key():
     original_data = b"Hi this is Harsh"
     encrypted_package = encrypt_file_data(original_data)
-    
+
     encrypted_package["key"] = encrypt_file_data(b"Another file")["key"]
 
     # Act and Assert
@@ -84,6 +102,7 @@ def test_invalid_nonce_length():
     # Act and Assert
     with pytest.raises(ValueError, match="12 bytes"):
         decrypt_file_data(encrypted_package)
+
 
 def test_encrypt_file_data_invalid_input():
     with pytest.raises(TypeError):
