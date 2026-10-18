@@ -50,3 +50,44 @@ def wrap_file_key(dek: bytes) -> dict:
         "wrapped_dek": wrapped_dek,
         "nonce": nonce,
     }
+
+
+def unwrap_file_key(encrypted_package: dict) -> bytes:
+    """Decrypt and authenticate a wrapped DEK using the KEK"""
+
+    if not isinstance(encrypted_package, dict):
+        raise TypeError("Encrypted package must be a dictionary")
+
+    if "wrapped_dek" not in encrypted_package or "nonce" not in encrypted_package:
+        raise ValueError(
+            "Encrypted Package must contain wrapped_dek and nonce")
+
+    wrapped_dek = encrypted_package["wrapped_dek"]
+    nonce = encrypted_package["nonce"]
+
+    if not isinstance(wrapped_dek, bytes):
+        raise TypeError("Wrapped DEK must be bytes")
+
+    if not isinstance(nonce, bytes):
+        raise TypeError("Nonce must be bytes")
+
+    # A 32-byte DEK plus a 16-byte AES-GCM authentication tag.
+    if len(wrapped_dek) != 48:
+        raise ValueError("Wrapped DEK must be exactly 48 bytes")
+
+    if len(nonce) != 12:
+        raise ValueError("Nonce must be exactly 12 bytes")
+
+    kek = _load_kek()
+
+    aesgcm = AESGCM(kek)
+
+    # InvalidTag is raised if the ciphertext was tampered with
+    # or the wrong KEK was used.
+
+    dek = aesgcm.decrypt(nonce, wrapped_dek, None)
+
+    if len(dek) != 32:
+        raise ValueError("Unwrapped DEK must be exactly 32 bytes")
+
+    return dek
