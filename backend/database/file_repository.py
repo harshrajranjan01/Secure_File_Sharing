@@ -171,3 +171,67 @@ def save_encrypted_file_metadata(
                 connection.close()
             except mysql.connector.Error:
                 pass
+
+
+def get_encrypted_file_metadata(file_id: int) -> dict | None:
+
+    if type(file_id) is not int or file_id <= 0:
+        return None
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_db_connection()
+
+        if connection is None:
+            return None
+
+        cursor = connection.cursor(dictionary=True)
+
+        query = """
+                SELECT
+                    id,
+                    filename,
+                    content_type,
+                    storage_key,
+                    file_nonce,
+                    wrapped_dek,
+                    key_nonce,
+                    size_bytes
+                FROM files
+                WHERE id = %s
+            """
+
+        cursor.execute(query, (file_id,))
+
+        result = cursor.fetchone()
+
+        if result is None:
+            return None
+
+        return result
+
+    except mysql.connector.Error:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except mysql.connector.Error:
+                pass
+
+        return None
+
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+
+            except mysql.connector.Error:
+                pass
+
+        if connection is not None:
+            try:
+                connection.close()
+
+            except mysql.connector.Error:
+                pass
