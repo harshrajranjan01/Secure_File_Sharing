@@ -81,11 +81,9 @@ def test_delete_rejects_invalid_identifiers(storage_dir, invalid_key):
         storage.delete_encrypted_file(invalid_key)
 
 
-
-def test_delete_rejects_non_string_identifier(storage_dir):
-    with pytest.raises(TypeError):
-        storage.delete_encrypted_file(123)
-
+def test_read_rejects_non_string_identifier(storage_dir):
+    with pytest.raises(ValueError):
+        storage.read_encrypted_file(123)
 
 
 def test_store_does_not_overwrite_existing_file(storage_dir, monkeypatch):
@@ -106,3 +104,40 @@ def test_store_does_not_overwrite_existing_file(storage_dir, monkeypatch):
 
     # Confirm that the original file was not overwritten.
     assert existing_file.read_bytes() == original_ciphertext
+
+
+
+# ---------------------------------------------------------------------------
+# Read Encrypted File Tests
+# ---------------------------------------------------------------------------
+def test_read_encrypted_file(storage_dir):
+    ciphertext = b"\x00encrypted\xffdata"
+    storage_key = storage.store_encrypted_file(ciphertext)
+
+    result = storage.read_encrypted_file(storage_key)
+
+    assert result == ciphertext
+    assert isinstance(result, bytes)
+
+
+@pytest.mark.parametrize(
+    "invalid_key",
+    [
+        "a" * 63,  # Wrong length
+        "a" * 65,  # Wrong length
+        "A" * 64,  # Uppercase characters
+        "g" * 64,  # Non-hexadecimal character
+        "../" + "a" * 61,  # Path traversal
+        "a" * 63 + "/",  # Trailing path separator
+    ],
+)
+def test_read_rejects_invalid_identifiers(storage_dir, invalid_key):
+    with pytest.raises(ValueError):
+        storage.read_encrypted_file(invalid_key)
+
+
+def test_read_nonexistent_file(storage_dir):
+    with pytest.raises(FileNotFoundError):
+        storage.read_encrypted_file("a" * 64)
+
+
