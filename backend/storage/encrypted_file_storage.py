@@ -30,7 +30,6 @@ def store_encrypted_file(ciphertext: bytes) -> str:
 
     return storage_key
 
-
 def delete_encrypted_file(storage_key: str) -> None:
     """Delete a stored ciphertext file, ignoring missing files."""
 
