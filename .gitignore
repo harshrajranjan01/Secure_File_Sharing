@@ -28,7 +28,6 @@ Thumbs.db
 
 # Local uploads and generated encrypted files
 uploads/
-storage/
 *.enc
 
 # Private keys and certificates
