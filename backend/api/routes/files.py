@@ -3,8 +3,14 @@ from fastapi import APIRouter, UploadFile, HTTPException, status
 
 from backend.crypto.file_crypto import encrypt_file_data
 from backend.api.schemas.file import FileMetadataRequest
-from backend.database.file_repository import save_file_metadata
 
+from backend.crypto.key_wrapping import wrap_file_key
+
+from backend.storage.encrypted_file_storage import (
+    store_encrypted_file,
+    delete_encrypted_file,
+)
+from backend.database.file_repository import save_encrypted_file_metadata
 
 router = APIRouter()
 
@@ -20,29 +26,7 @@ KEY_SIZE = 32
 NONCE_SIZE = 12
 GCM_TAG_SIZE = 16
 
-
-@router.post("/files", status_code=status.HTTP_201_CREATED)
-def create_file(file: FileMetadataRequest):
-    """Save file metadata in the database."""
-
-    file_id = save_file_metadata(
-        file.filename,
-        file.content_type,
-    )
-
-    if file_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save file metadata.",
-        )
-
-    return {
-        "message": "File metadata saved successfully",
-        "file_id": file_id,
-    }
-
-
-@router.post("/files/upload", status_code=status.HTTP_200_OK)
+@router.post("/files/upload", status_code=status.HTTP_201_CREATED)
 async def upload_file(file: UploadFile):
     """Validate a PDF, encrypt its bytes, and return safe metadata."""
 
@@ -158,10 +142,111 @@ async def upload_file(file: UploadFile):
                 detail="Encryption produced invalid ciphertext.",
             )
 
+        # wrap the data encryption key(DEK)
+        try:
+            key_wrapping_result = wrap_file_key(key)
+
+        except HTTPException:
+            raise
+
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Key wrapping failed.",
+            ) from None
+
+        if not isinstance(key_wrapping_result, dict):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Key wrapping produced an invalid result"
+            )
+
+        if not {"wrapped_dek", "nonce"}.issubset(key_wrapping_result):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Key wrapping result is missing required field"
+            )
+
+        wrapped_dek = key_wrapping_result["wrapped_dek"]
+        key_nonce = key_wrapping_result["nonce"]
+
+        if not isinstance(wrapped_dek, bytes) or len(wrapped_dek) != (KEY_SIZE+GCM_TAG_SIZE):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Key wrapping produced an invalid wrapped DEK",
+            )
+
+        if not isinstance(key_nonce, bytes) or len(key_nonce) != NONCE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Key wrapping produced an invalid nonce",
+            )
+
+        # Store the Encrypted file and obtain its identifier.
+        try:
+            storage_key = store_encrypted_file(ciphertext)
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to store encrypted file.",
+            ) from None
+
+        if (
+            not isinstance(storage_key, str)
+            or len(storage_key) != 64
+            or any(char not in "0123456789abcdef" for char in storage_key)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Encrypted file storage produced an invalid identifier.",
+            )
+
+        # save encrypted file metadata to MYSQL.
+        try:
+            file_id = save_encrypted_file_metadata(
+                file.filename,
+                file.content_type,
+                storage_key,
+                nonce,
+                wrapped_dek,
+                key_nonce,
+                total_size,
+            )
+        except HTTPException:
+            try:
+                delete_encrypted_file(storage_key)
+            except Exception:
+                pass
+            raise
+
+        except Exception:
+            try:
+                delete_encrypted_file(storage_key)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save encrypted file metadata.",
+            ) from None
+
+        if file_id is None:
+            try:
+                delete_encrypted_file(storage_key)
+            except Exception:
+                pass
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save encrypted file metadata.",
+            )
+
         # 15. Return safe metadata only.
         # Do not return the ciphertext, nonce, or raw DEK.
         return {
             "message": "PDF validated and encrypted successfully",
+            "file_id": file_id,
             "filename": file.filename,
             "content_type": file.content_type,
             "size_bytes": total_size,
