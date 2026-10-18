@@ -30,6 +30,7 @@ def store_encrypted_file(ciphertext: bytes) -> str:
 
     return storage_key
 
+
 def delete_encrypted_file(storage_key: str) -> None:
     """Delete a stored ciphertext file, ignoring missing files."""
 
@@ -49,3 +50,17 @@ def delete_encrypted_file(storage_key: str) -> None:
     except FileNotFoundError:
         # Already deleted or never existed; cleanup is complete.
         pass
+
+
+def read_encrypted_file(storage_key: str) -> bytes:
+
+    if (
+        not isinstance(storage_key, str)
+        or len(storage_key) != 64
+        or any(char not in "0123456789abcdef" for char in storage_key)
+    ):
+        raise ValueError("Invalid Storage Key")
+
+    file_path=STORAGE_DIR / f"{storage_key}.enc"
+
+    return   file_path.read_bytes()
