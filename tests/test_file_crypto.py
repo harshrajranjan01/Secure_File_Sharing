@@ -112,3 +112,41 @@ def test_encrypt_file_data_invalid_input():
 def test_decrypt_file_data_invalid_input():
     with pytest.raises(TypeError):
         decrypt_file_data("this is not a dictionary")
+
+
+
+import pytest
+from cryptography.exceptions import InvalidTag
+
+from backend.crypto.file_crypto import (
+    encrypt_file_data,
+    decrypt_file_data,
+)
+
+
+def test_decrypt_rejects_tampered_ciphertext():
+    """Reject ciphertext that has been modified."""
+
+    encrypted = encrypt_file_data(b"%PDF-1.4\noriginal content")
+
+    tampered_ciphertext = bytearray(encrypted["ciphertext"])
+    tampered_ciphertext[0] ^= 1
+
+    encrypted["ciphertext"] = bytes(tampered_ciphertext)
+
+    with pytest.raises(InvalidTag):
+        decrypt_file_data(encrypted)
+
+
+def test_decrypt_rejects_tampered_nonce():
+    """Reject a modified nonce when authentication fails."""
+
+    encrypted = encrypt_file_data(b"%PDF-1.4\noriginal content")
+
+    tampered_nonce = bytearray(encrypted["nonce"])
+    tampered_nonce[0] ^= 1
+
+    encrypted["nonce"] = bytes(tampered_nonce)
+
+    with pytest.raises(InvalidTag):
+        decrypt_file_data(encrypted)
