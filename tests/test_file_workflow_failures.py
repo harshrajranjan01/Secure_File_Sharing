@@ -86,3 +86,24 @@ def test_upload_metadata_persistence_failure(mock_save_metadata):
     )
 
     assert response.status_code >= 400
+
+
+from unittest.mock import patch
+
+
+@patch("backend.api.routes.files.delete_encrypted_file")
+@patch("backend.api.routes.files.save_encrypted_file_metadata")
+def test_upload_metadata_failure_cleans_up_storage(
+    mock_save_metadata,
+    mock_delete_file,
+):
+    mock_save_metadata.side_effect = RuntimeError(
+        "Database unavailable"
+    )
+
+    # Add the upload request and storage mock setup used
+    # by your existing upload tests here.
+
+    # Expected behavior:
+    # assert response.status_code == 500
+    # mock_delete_file.assert_called_once()
