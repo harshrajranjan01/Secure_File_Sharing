@@ -63,4 +63,4 @@ def read_encrypted_file(storage_key: str) -> bytes:
 
     file_path=STORAGE_DIR / f"{storage_key}.enc"
 
-    return   file_path.read_bytes()
+    return   file_path.read_bytes() #its actually ciphertext
