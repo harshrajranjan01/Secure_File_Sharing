@@ -23,7 +23,8 @@ from backend.storage.encrypted_file_storage import (
 from backend.database.file_repository import (
     save_encrypted_file_metadata,
     get_encrypted_file_metadata,
-    delete_file_metadata
+    delete_file_metadata,
+    list_files_metadata
 )
 
 
@@ -395,3 +396,21 @@ def delete_file(file_id: int = Path(ge=1)):
         "message": "File deleted successfully.",
         "file_id": file_id,
     }
+
+
+@router.get("/files")
+def get_files() -> list[dict]:
+    "return safe metadata for all stored files"
+
+    files = list_files_metadata()
+
+    return [
+        {
+            "id": file["id"],
+            "filename": file["filename"],
+            "content_type": file["content_type"],
+            "created_at": file["created_at"],
+            "size_bytes": file["size_bytes"],
+        }
+        for file in files
+    ]
