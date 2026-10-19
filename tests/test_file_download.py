@@ -19,31 +19,43 @@ VALID_METADATA = {
 }
 
 CIPHERTEXT = b"encrypted-pdf-data"
+ORIGINAL_PDF = b"%PDF-1.4\noriginal PDF content"
 
 
+@patch("backend.api.routes.files.unwrap_file_key")
+@patch("backend.api.routes.files.decrypt_file_data")
 @patch("backend.api.routes.files.read_encrypted_file")
 @patch("backend.api.routes.files.get_encrypted_file_metadata")
-def test_download_file_success(mock_get_metadata, mock_read_file):
-    """Return a confirmation response for a valid encrypted file."""
+def test_download_file_success(
+    mock_get_metadata,
+    mock_read_file,
+    mock_decrypt,
+    mock_unwrap_key,
+):
+    """Return the original PDF for a valid encrypted file."""
 
     mock_get_metadata.return_value = VALID_METADATA
     mock_read_file.return_value = CIPHERTEXT
+    mock_unwrap_key.return_value = b"x" * 32
+    mock_decrypt.return_value = ORIGINAL_PDF
 
     response = client.get(DOWNLOAD_URL.format(1))
 
     assert response.status_code == 200
-    assert response.json() == {
-        "message": "Encrypted file retrieved successfully",
-        "file_id": 1,
-        "ciphertext_size": len(CIPHERTEXT),
-    }
+    assert response.content == ORIGINAL_PDF
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="download.pdf"'
+    )
 
     mock_get_metadata.assert_called_once_with(1)
     mock_read_file.assert_called_once_with(VALID_METADATA["storage_key"])
+    mock_unwrap_key.assert_called_once()
+    mock_decrypt.assert_called_once()
 
     # The response must not expose the ciphertext or wrapped DEK.
-    assert CIPHERTEXT.decode() not in response.text
-    assert VALID_METADATA["wrapped_dek"].decode() not in response.text
+    assert CIPHERTEXT not in response.content
+    assert VALID_METADATA["wrapped_dek"] not in response.content
 
 
 @patch("backend.api.routes.files.read_encrypted_file")
