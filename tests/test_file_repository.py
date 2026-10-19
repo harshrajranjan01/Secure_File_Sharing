@@ -1,4 +1,5 @@
 
+from backend.database.file_repository import delete_file_metadata
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -144,3 +145,84 @@ def test_database_error_rolls_back_and_closes_resources(
     # Verify resource cleanup
     mock_cursor.close.assert_called_once()
     mock_connection.close.assert_called_once()
+
+
+# ============================================================
+# Tests for delete_file_metadata()
+# ============================================================
+
+
+@patch("backend.database.file_repository.get_db_connection")
+def test_delete_file_metadata_success(mock_get_connection):
+    """Verify successful deletion of one metadata record."""
+
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+
+    mock_connection.cursor.return_value = mock_cursor
+    mock_get_connection.return_value = mock_connection
+    mock_cursor.rowcount = 1
+
+    result = delete_file_metadata(123)
+
+    assert result is True
+
+    mock_cursor.execute.assert_called_once_with(
+        "DELETE FROM files WHERE id=%s",
+        (123,),
+    )
+    mock_connection.commit.assert_called_once()
+    mock_cursor.close.assert_called_once()
+    mock_connection.close.assert_called_once()
+
+
+@patch("backend.database.file_repository.get_db_connection")
+def test_delete_file_metadata_no_matching_row(mock_get_connection):
+    """Verify False is returned when no record matches."""
+
+    mock_connection = MagicMock()
+    mock_cursor = MagicMock()
+
+    mock_connection.cursor.return_value = mock_cursor
+    mock_get_connection.return_value = mock_connection
+    mock_cursor.rowcount = 0
+
+    result = delete_file_metadata(999)
+
+    assert result is False
+    mock_connection.commit.assert_not_called()
+    mock_cursor.close.assert_called_once()
+    mock_connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "file_id",
+    [True, False, "123", 1.5, None, []],
+)
+def test_delete_file_metadata_invalid_type(file_id):
+    """Verify invalid ID types raise TypeError."""
+
+    with pytest.raises(TypeError):
+        delete_file_metadata(file_id)
+
+
+@pytest.mark.parametrize("file_id", [0, -1, -100])
+def test_delete_file_metadata_non_positive_id(file_id):
+    """Verify zero and negative IDs raise ValueError."""
+
+    with pytest.raises(ValueError):
+        delete_file_metadata(file_id)
+
+
+@patch("backend.database.file_repository.get_db_connection")
+def test_delete_file_metadata_connection_unavailable(
+    mock_get_connection,
+):
+    """Verify False is returned when the database is unavailable."""
+
+    mock_get_connection.return_value = None
+
+    result = delete_file_metadata(123)
+
+    assert result is False
+    mock_get_connection.assert_called_once()
