@@ -100,10 +100,3 @@ def test_upload_metadata_failure_cleans_up_storage(
     mock_save_metadata.side_effect = RuntimeError(
         "Database unavailable"
     )
-
-    # Add the upload request and storage mock setup used
-    # by your existing upload tests here.
-
-    # Expected behavior:
-    # assert response.status_code == 500
-    # mock_delete_file.assert_called_once()
