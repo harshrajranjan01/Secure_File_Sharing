@@ -1,10 +1,18 @@
 
 from fastapi import APIRouter, UploadFile, HTTPException, status, Path
+from fastapi.responses import Response
 
-from backend.crypto.file_crypto import encrypt_file_data
+from backend.crypto.file_crypto import (
+    encrypt_file_data,
+    decrypt_file_data
+)
+
 from backend.api.schemas.file import FileMetadataRequest
 
-from backend.crypto.key_wrapping import wrap_file_key
+from backend.crypto.key_wrapping import (
+    wrap_file_key,
+    unwrap_file_key
+)
 
 from backend.storage.encrypted_file_storage import (
     store_encrypted_file,
@@ -318,8 +326,36 @@ def download_file(file_id: int = Path(ge=1)):
             detail="Encrypted storage returned invalid data",
         )
 
-    return {
-        "message": "Encrypted file retrieved successfully",
-        "file_id": file_id,
-        "ciphertext_size": len(ciphertext),
-    }
+    # Unwrp the Data Encryption Key(DEK)
+    try:
+        dek = unwrap_file_key({
+            "wrapped_dek": metadata["wrapped_dek"],
+            "nonce": metadata["key_nonce"],
+        }
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to recover the file encryption key"
+        )
+
+    # Decrypt the file using the recovered DEK
+    try:
+        original_bytes = decrypt_file_data({
+            "ciphertext": ciphertext,
+            "nonce": metadata["file_nonce"],
+            "key": dek,
+        })
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decrypt the file.",
+        )
+
+    return Response(
+        content=original_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="download.pdf"'
+        },
+    )
