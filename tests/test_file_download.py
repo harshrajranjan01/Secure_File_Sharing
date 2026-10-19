@@ -161,3 +161,49 @@ def test_download_file_invalid_id(
     assert response.status_code == 422
     mock_get_metadata.assert_not_called()
     mock_read_file.assert_not_called()
+
+
+@patch("backend.api.routes.files.unwrap_file_key")
+@patch("backend.api.routes.files.read_encrypted_file")
+@patch("backend.api.routes.files.get_encrypted_file_metadata")
+def test_download_file_key_unwrap_failure(
+    mock_get_metadata,
+    mock_read_file,
+    mock_unwrap_key,
+):
+    """Return 500 when the DEK cannot be unwrapped."""
+
+    mock_get_metadata.return_value = VALID_METADATA
+    mock_read_file.return_value = CIPHERTEXT
+    mock_unwrap_key.side_effect = Exception("Key unwrap failed")
+
+    response = client.get(DOWNLOAD_URL.format(1))
+
+    assert response.status_code == 500
+    assert ORIGINAL_PDF not in response.content
+    mock_unwrap_key.assert_called_once()
+
+
+@patch("backend.api.routes.files.unwrap_file_key")
+@patch("backend.api.routes.files.decrypt_file_data")
+@patch("backend.api.routes.files.read_encrypted_file")
+@patch("backend.api.routes.files.get_encrypted_file_metadata")
+def test_download_file_decryption_failure(
+    mock_get_metadata,
+    mock_read_file,
+    mock_decrypt,
+    mock_unwrap_key,
+):
+    """Return 500 when ciphertext authentication or decryption fails."""
+
+    mock_get_metadata.return_value = VALID_METADATA
+    mock_read_file.return_value = CIPHERTEXT
+    mock_unwrap_key.return_value = b"x" * 32
+    mock_decrypt.side_effect = Exception("Decryption failed")
+
+    response = client.get(DOWNLOAD_URL.format(1))
+
+    assert response.status_code == 500
+    assert ORIGINAL_PDF not in response.content
+    mock_unwrap_key.assert_called_once()
+    mock_decrypt.assert_called_once()
