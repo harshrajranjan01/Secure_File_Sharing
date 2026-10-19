@@ -284,3 +284,44 @@ def delete_file_metadata(file_id: int) -> bool:
                 connection.close()
             except mysql.connector.Error:
                 pass
+
+
+def list_files_metadata():
+    """Return file metadata ordered by newest first"""
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_db_connection()
+
+        if connection is None:
+            return []
+
+        cursor = connection.cursor(dictionary=True)
+
+        query = """
+            SELECT id, filename, content_type, created_at, size_bytes
+            FROM files
+            ORDER BY created_at DESC, id DESC
+        """
+
+        cursor.execute(query)
+        return cursor.fetchall()
+
+    except mysql.connector.Error:
+        return []
+
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+
+            except mysql.connector.Error:
+                pass
+
+        if connection is not None:
+            try:
+                connection.close()
+            except mysql.connector.Error:
+                pass
