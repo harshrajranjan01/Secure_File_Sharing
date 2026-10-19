@@ -274,6 +274,25 @@ async def upload_file(file: UploadFile):
         await file.close()
 
 
+
+@router.get("/files")
+def get_files() -> list[dict]:
+    "return safe metadata for all stored files"
+
+    files = list_files_metadata()
+
+    return [
+        {
+            "id": file["id"],
+            "filename": file["filename"],
+            "content_type": file["content_type"],
+            "created_at": file["created_at"],
+            "size_bytes": file["size_bytes"],
+        }
+        for file in files
+    ]
+
+
 @router.get("/files/{file_id}/download", status_code=status.HTTP_200_OK)
 def download_file(file_id: int = Path(ge=1)):
     """Retrieve, decrypt, and download a stored PDF."""
@@ -397,20 +416,3 @@ def delete_file(file_id: int = Path(ge=1)):
         "file_id": file_id,
     }
 
-
-@router.get("/files")
-def get_files() -> list[dict]:
-    "return safe metadata for all stored files"
-
-    files = list_files_metadata()
-
-    return [
-        {
-            "id": file["id"],
-            "filename": file["filename"],
-            "content_type": file["content_type"],
-            "created_at": file["created_at"],
-            "size_bytes": file["size_bytes"],
-        }
-        for file in files
-    ]
