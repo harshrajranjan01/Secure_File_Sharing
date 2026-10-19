@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, UploadFile, HTTPException, status
+from fastapi import APIRouter, UploadFile, HTTPException, status, Path
 
 from backend.crypto.file_crypto import encrypt_file_data
 from backend.api.schemas.file import FileMetadataRequest
@@ -9,8 +9,14 @@ from backend.crypto.key_wrapping import wrap_file_key
 from backend.storage.encrypted_file_storage import (
     store_encrypted_file,
     delete_encrypted_file,
+    read_encrypted_file
 )
-from backend.database.file_repository import save_encrypted_file_metadata
+
+from backend.database.file_repository import (
+    save_encrypted_file_metadata,
+    get_encrypted_file_metadata
+)
+
 
 router = APIRouter()
 
@@ -25,6 +31,7 @@ PDF_SIGNATURE = b"%PDF-"
 KEY_SIZE = 32
 NONCE_SIZE = 12
 GCM_TAG_SIZE = 16
+
 
 @router.post("/files/upload", status_code=status.HTTP_201_CREATED)
 async def upload_file(file: UploadFile):
@@ -255,3 +262,64 @@ async def upload_file(file: UploadFile):
 
     finally:
         await file.close()
+
+
+@router.get("/files/{file_id}/download", status_code=status.HTTP_200_OK)
+def download_file(file_id: int = Path(ge=1)):
+    """Retrieve encrypted file metadata and ciphertext without decrypting"""
+
+    # 1. Retrieve the file metadata from mysql
+    try:
+        metadata = get_encrypted_file_metadata(file_id)
+
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve file metadata",
+        ) from None
+
+    if metadata is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found",
+        )
+
+    required_fields = (
+        "storage_key",
+        "file_nonce",
+        "wrapped_dek",
+        "key_nonce",
+    )
+
+    if any(metadata.get(field) is None for field in required_fields):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="File is missing required encryption metadata",
+        )
+
+    # Read the Encrypted file from storage
+    try:
+        ciphertext = read_encrypted_file(metadata["storage_key"])
+
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Encrypted file not found in storage",
+        ) from None
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve encrypted file",
+        )from None
+
+    if not isinstance(ciphertext, bytes):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Encrypted storage returned invalid data",
+        )
+
+    return {
+        "message": "Encrypted file retrieved successfully",
+        "file_id": file_id,
+        "ciphertext_size": len(ciphertext),
+    }
