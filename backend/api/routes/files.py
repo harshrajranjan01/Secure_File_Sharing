@@ -22,7 +22,8 @@ from backend.storage.encrypted_file_storage import (
 
 from backend.database.file_repository import (
     save_encrypted_file_metadata,
-    get_encrypted_file_metadata
+    get_encrypted_file_metadata,
+    delete_file_metadata
 )
 
 
@@ -274,7 +275,7 @@ async def upload_file(file: UploadFile):
 
 @router.get("/files/{file_id}/download", status_code=status.HTTP_200_OK)
 def download_file(file_id: int = Path(ge=1)):
-    """Retrieve encrypted file metadata and ciphertext without decrypting"""
+    """Retrieve, decrypt, and download a stored PDF."""
 
     # 1. Retrieve the file metadata from mysql
     try:
@@ -359,3 +360,38 @@ def download_file(file_id: int = Path(ge=1)):
             "Content-Disposition": 'attachment; filename="download.pdf"'
         },
     )
+
+
+@router.delete("/files/{file_id}")
+def delete_file(file_id: int = Path(ge=1)):
+
+    metadata = get_encrypted_file_metadata(file_id)
+
+    if metadata is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File Not found",
+        )
+
+    delete = delete_file_metadata(file_id)
+
+    if not delete:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to delete file metadata",
+        )
+
+    try:
+        storage_key = metadata["storage_key"]
+        delete_encrypted_file(storage_key)
+
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="File metadata was deleted, but encrypted file cleanup failed."
+        )
+
+    return {
+        "message": "File deleted successfully.",
+        "file_id": file_id,
+    }
