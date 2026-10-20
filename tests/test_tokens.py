@@ -4,8 +4,10 @@ import time
 import jwt
 import pytest
 
-from backend.auth.tokens import create_access_token
+from backend.auth.tokens import create_access_token,verify_access_token
 
+
+TEST_SECRET = "test-only-secret-key-for-jwt"
 
 def test_create_access_token_returns_jwt_string(monkeypatch):
     """A valid user ID should produce a JWT string."""
@@ -84,3 +86,154 @@ def test_blank_jwt_secret_raises_runtime_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="JWT_SECRET_KEY"):
         create_access_token(1)
+
+
+
+
+@pytest.fixture(autouse=True)
+def set_jwt_secret(monkeypatch):
+    """Use a temporary secret for every test."""
+    monkeypatch.setenv("JWT_SECRET_KEY", TEST_SECRET)
+
+
+def test_valid_token_returns_claims():
+    token = create_access_token(123)
+
+    claims = verify_access_token(token)
+
+    assert claims is not None
+    assert claims["sub"] == "123"
+    assert "iat" in claims
+    assert "exp" in claims
+
+
+def test_empty_token_returns_none():
+    assert verify_access_token("") is None
+    assert verify_access_token("   ") is None
+
+
+@pytest.mark.parametrize("token", [None, 123, True, [], {}])
+def test_non_string_token_returns_none(token):
+    assert verify_access_token(token) is None
+
+
+def test_expired_token_returns_none():
+    now = int(time.time())
+
+    token = jwt.encode(
+        {
+            "sub": "123",
+            "iat": now - 120,
+            "exp": now - 60,
+        },
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    assert verify_access_token(token) is None
+
+
+def test_wrong_secret_returns_none(monkeypatch):
+    token = create_access_token(123)
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "different-test-secret")
+
+    assert verify_access_token(token) is None
+
+
+def test_modified_token_returns_none():
+    token = create_access_token(123)
+    parts = token.split(".")
+
+    # Change the signature.
+    parts[2] = ("A" if parts[2][0] != "A" else "B") + parts[2][1:]
+    modified_token = ".".join(parts)
+
+    assert verify_access_token(modified_token) is None
+
+
+@pytest.mark.parametrize("missing_claim", ["sub", "iat", "exp"])
+def test_missing_required_claim_returns_none(missing_claim):
+    now = int(time.time())
+    claims = {
+        "sub": "123",
+        "iat": now,
+        "exp": now + 900,
+    }
+    del claims[missing_claim]
+
+    token = jwt.encode(
+        claims,
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    assert verify_access_token(token) is None
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "0",
+        "-1",
+        "admin",
+        "001",
+        "",
+        "1.5",
+    ],
+)
+def test_invalid_subject_returns_none(subject):
+    now = int(time.time())
+
+    token = jwt.encode(
+        {
+            "sub": subject,
+            "iat": now,
+            "exp": now + 900,
+        },
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    assert verify_access_token(token) is None
+
+
+def test_non_string_subject_returns_none():
+    now = int(time.time())
+
+    token = jwt.encode(
+        {
+            "sub": 123,
+            "iat": now,
+            "exp": now + 900,
+        },
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    assert verify_access_token(token) is None
+
+
+def test_missing_secret_returns_none(monkeypatch):
+    token = create_access_token(123)
+
+    monkeypatch.delenv("JWT_SECRET_KEY")
+
+    assert verify_access_token(token) is None
+
+
+def test_wrong_algorithm_returns_none():
+    now = int(time.time())
+
+    # The verifier must reject a token signed with HS384.
+    token = jwt.encode(
+        {
+            "sub": "123",
+            "iat": now,
+            "exp": now + 900,
+        },
+        TEST_SECRET,
+        algorithm="HS384",
+    )
+
+    assert verify_access_token(token) is None
