@@ -309,24 +309,18 @@ def download_file(
     # 1. Retrieve the file metadata from mysql
     try:
         metadata = get_encrypted_file_metadata(file_id)
-
-        if metadata is None or metadata["user_id"] != user_id:
-            raise HTTPException(
-                status_code=404,
-                detail="File not found",
-            )
-
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve file metadata",
         ) from None
 
-    if metadata is None:
+    if metadata is None or metadata.get("user_id") != user_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found",
         )
+    
 
     required_fields = (
         "storage_key",
@@ -398,17 +392,20 @@ def download_file(
 
 
 @router.delete("/files/{file_id}")
-def delete_file(file_id: int = Path(ge=1)):
-
+def delete_file(
+    file_id: int = Path(ge=1),
+    user_id: int = Depends(get_current_user_id),
+):
     metadata = get_encrypted_file_metadata(file_id)
 
-    if metadata is None:
+    if metadata is None or metadata.get("user_id") != user_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="File Not found",
+            detail="File not found",
         )
 
-    delete = delete_file_metadata(file_id)
+
+    delete = delete_file_metadata(file_id,user_id)
 
     if not delete:
         raise HTTPException(

@@ -243,7 +243,7 @@ def get_encrypted_file_metadata(file_id: int) -> dict | None:
                 pass
 
 
-def delete_file_metadata(file_id: int) -> bool:
+def delete_file_metadata(file_id: int, user_id: int) -> bool:
 
     if isinstance(file_id, bool) or not isinstance(file_id, int):
         raise TypeError("file_id must be an integer")
@@ -261,7 +261,10 @@ def delete_file_metadata(file_id: int) -> bool:
             return False
 
         cursor = connection.cursor()
-        cursor.execute("DELETE FROM files WHERE id=%s", (file_id,))
+        cursor.execute(
+            "DELETE FROM files WHERE id = %s AND user_id = %s",
+            (file_id, user_id),
+        )
 
         if cursor.rowcount == 1:
             connection.commit()
@@ -315,7 +318,7 @@ def list_files_metadata(user_id: int):
             ORDER BY created_at DESC, id DESC
         """
 
-        cursor.execute(query,(user_id,))
+        cursor.execute(query, (user_id,))
         return cursor.fetchall()
 
     except mysql.connector.Error:
