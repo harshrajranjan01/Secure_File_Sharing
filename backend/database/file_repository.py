@@ -203,7 +203,8 @@ def get_encrypted_file_metadata(file_id: int) -> dict | None:
                     file_nonce,
                     wrapped_dek,
                     key_nonce,
-                    size_bytes
+                    size_bytes,
+                    user_id
                 FROM files
                 WHERE id = %s
             """

@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, UploadFile, HTTPException, status, Path,Depends
+from fastapi import APIRouter, UploadFile, HTTPException, status, Path, Depends
 from fastapi.responses import Response
 
 from backend.crypto.file_crypto import (
@@ -279,10 +279,9 @@ async def upload_file(
         await file.close()
 
 
-
 @router.get("/files")
 def get_files(
-    user_id:int=Depends(get_current_user_id)
+    user_id: int = Depends(get_current_user_id)
 ) -> list[dict]:
     "return safe metadata for all stored files"
 
@@ -301,12 +300,21 @@ def get_files(
 
 
 @router.get("/files/{file_id}/download", status_code=status.HTTP_200_OK)
-def download_file(file_id: int = Path(ge=1)):
+def download_file(
+    file_id: int = Path(ge=1),
+    user_id: int = Depends(get_current_user_id),
+):
     """Retrieve, decrypt, and download a stored PDF."""
 
     # 1. Retrieve the file metadata from mysql
     try:
         metadata = get_encrypted_file_metadata(file_id)
+
+        if metadata is None or metadata["user_id"] != user_id:
+            raise HTTPException(
+                status_code=404,
+                detail="File not found",
+            )
 
     except Exception:
         raise HTTPException(
@@ -422,4 +430,3 @@ def delete_file(file_id: int = Path(ge=1)):
         "message": "File deleted successfully.",
         "file_id": file_id,
     }
-
