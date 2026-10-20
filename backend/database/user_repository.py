@@ -1,10 +1,16 @@
+
 import mysql.connector
+from mysql.connector import IntegrityError
 
 from backend.database.connection import get_db_connection
 
 
+class DuplicateUsernameError(Exception):
+    """Raised when a username already exists."""
+
+
 def create_user(username: str, password_hash: str) -> int | None:
-    """Create a user and return their ID, or None if creation fails"""
+    """Create a user and return their ID, or None if creation fails."""
 
     if not isinstance(username, str) or not username.strip():
         return None
@@ -18,7 +24,7 @@ def create_user(username: str, password_hash: str) -> int | None:
     try:
         connection = get_db_connection()
 
-        if not connection:
+        if connection is None:
             return None
 
         cursor = connection.cursor()
@@ -37,6 +43,21 @@ def create_user(username: str, password_hash: str) -> int | None:
         connection.commit()
 
         return user_id
+
+    except IntegrityError as exc:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except mysql.connector.Error:
+                pass
+
+        # MySQL error 1062 indicates a duplicate-key violation.
+        if exc.errno == 1062:
+            raise DuplicateUsernameError(
+                "Username already exists."
+            ) from exc
+
+        return None
 
     except mysql.connector.Error:
         if connection is not None:
@@ -57,7 +78,6 @@ def create_user(username: str, password_hash: str) -> int | None:
         if connection is not None:
             try:
                 connection.close()
-
             except mysql.connector.Error:
                 pass
 
