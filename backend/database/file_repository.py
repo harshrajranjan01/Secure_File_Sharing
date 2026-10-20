@@ -291,12 +291,14 @@ def delete_file_metadata(file_id: int) -> bool:
                 pass
 
 
-def list_files_metadata():
+def list_files_metadata(user_id: int):
     """Return file metadata ordered by newest first"""
 
     connection = None
     cursor = None
 
+    if type(user_id) is not int or user_id <= 0:
+        return []
     try:
         connection = get_db_connection()
 
@@ -308,10 +310,11 @@ def list_files_metadata():
         query = """
             SELECT id, filename, content_type, created_at, size_bytes
             FROM files
+            WHERE user_id = %s
             ORDER BY created_at DESC, id DESC
         """
 
-        cursor.execute(query)
+        cursor.execute(query,(user_id,))
         return cursor.fetchall()
 
     except mysql.connector.Error:
