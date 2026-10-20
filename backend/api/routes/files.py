@@ -281,10 +281,12 @@ async def upload_file(
 
 
 @router.get("/files")
-def get_files() -> list[dict]:
+def get_files(
+    user_id:int=Depends(get_current_user_id)
+) -> list[dict]:
     "return safe metadata for all stored files"
 
-    files = list_files_metadata()
+    files = list_files_metadata(user_id)
 
     return [
         {
