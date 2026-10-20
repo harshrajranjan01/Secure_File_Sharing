@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, UploadFile, HTTPException, status, Path
+from fastapi import APIRouter, UploadFile, HTTPException, status, Path,Depends
 from fastapi.responses import Response
 
 from backend.crypto.file_crypto import (
@@ -27,6 +27,7 @@ from backend.database.file_repository import (
     list_files_metadata
 )
 
+from backend.auth.dependencies import get_current_user_id
 
 router = APIRouter()
 
@@ -44,7 +45,10 @@ GCM_TAG_SIZE = 16
 
 
 @router.post("/files/upload", status_code=status.HTTP_201_CREATED)
-async def upload_file(file: UploadFile):
+async def upload_file(
+    file: UploadFile,
+    user_id: int = Depends(get_current_user_id),
+):
     """Validate a PDF, encrypt its bytes, and return safe metadata."""
 
     try:
@@ -230,6 +234,7 @@ async def upload_file(file: UploadFile):
                 wrapped_dek,
                 key_nonce,
                 total_size,
+                user_id=user_id,
             )
         except HTTPException:
             try:
