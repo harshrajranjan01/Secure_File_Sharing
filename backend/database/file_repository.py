@@ -94,8 +94,11 @@ def save_encrypted_file_metadata(
         wrapped_dek: bytes,
         key_nonce: bytes,  # Nonce used to wrap the DEK
         size_bytes: int,
+        user_id: int,
 ) -> int | None:
 
+    if type(user_id) is not int or user_id <= 0:
+        return None
     # Reject invalid data before accessing MySQL.
     if not _is_valid_encrypted_file_metadata(
         filename,
@@ -126,9 +129,10 @@ def save_encrypted_file_metadata(
                     file_nonce,
                     wrapped_dek,
                     key_nonce,
-                    size_bytes
+                    size_bytes,
+                    user_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s,%s)
             """
 
         values = (
@@ -138,7 +142,8 @@ def save_encrypted_file_metadata(
             file_nonce,
             wrapped_dek,
             key_nonce,
-            size_bytes
+            size_bytes,
+            user_id
         )
         cursor.execute(query, values)
 
