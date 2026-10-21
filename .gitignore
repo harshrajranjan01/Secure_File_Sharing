@@ -29,6 +29,7 @@ Thumbs.db
 # Local uploads and generated encrypted files
 uploads/
 *.enc
+private_storage/
 
 # Private keys and certificates
 *.pem
